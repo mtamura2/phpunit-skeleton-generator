@@ -267,8 +267,14 @@ class TestGenerator extends AbstractGenerator
                         // $axxx ... array
                         // $oxxx ... object
                         foreach ($method->getParameters() as $param) {
-                            if (substr($param->name, 0, 1) === 'n') {
+                            if (substr($param->name, 0, 1) === 's') {
+                                $args[] = $this->getStringArg();
+                            } elseif (substr($param->name, 0, 1) === 'n') {
                                 $args[] = $this->getIntegerArg();
+                            } elseif (substr($param->name, 0, 1) === 'd') {
+                                $args[] = $this->getDoubleArg();
+                            } elseif (substr($param->name, 0, 1) === 'b') {
+                                $args[] = $this->getBooleanArg();
                             } else {
                                 break;
                             }
@@ -283,6 +289,11 @@ class TestGenerator extends AbstractGenerator
                             array_unshift($args, new $this->inClassName['fullyQualifiedClassName']);
                             $expected = call_user_func_array(array($method, 'invoke'), $args);
                             array_shift($args);
+
+                            foreach ($args as $key => $arg) {
+                                $args[$key] = $this->changeCodeString($arg);
+                            }
+                            $expected = $this->changeCodeString($expected);
 
                             $methodTemplate->setVar(
                                 array(
@@ -388,10 +399,43 @@ class TestGenerator extends AbstractGenerator
         return $methodName;
     }
     
+    private function getStringArg() {
+        $choises = array(
+            'abc', 'ABC', '123', '!"#', 'ｱｲｳ',
+            'あいう', 'アイウ', '亜位雨',
+        );
+        return $choises[array_rand($choises)];
+    }
+
+
     private function getIntegerArg() {
         $choises = array(
             PHP_INT_MAX, PHP_INT_MIN, -1, 0, 1,
+            -10, 10,
         );
         return $choises[array_rand($choises)];
+    }
+
+    private function getDoubleArg() {
+        $choises = array(
+             1.8e308,  -1.8e308, 1.234, 1.2e3, 7E-10,
+        );
+        return $choises[array_rand($choises)];
+    }
+
+    private function getBooleanArg() {
+        $choises = array(
+             true, false,
+        );
+        return $choises[array_rand($choises)];
+    }
+
+    private function changeCodeString($param) {
+        if (gettype($param) === 'boolean') {
+            return $param ? 'true' : 'false';
+        } elseif (gettype($param) === 'string') {
+            return "'". $param. "'";
+        }
+        return $param;
     }
 }

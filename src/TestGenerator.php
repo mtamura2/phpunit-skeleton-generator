@@ -232,32 +232,10 @@ class TestGenerator extends AbstractGenerator
                                 $template = 'TestMethod';
                             }
 
-                            if ($method->isStatic()) {
-                                $template .= 'Static';
-                            }
-
-                            $methodTemplate = new \Text_Template(
-                                sprintf(
-                                    '%s%stemplate%s%s.tpl',
-                                    __DIR__,
-                                    DIRECTORY_SEPARATOR,
-                                    DIRECTORY_SEPARATOR,
-                                    $template
-                                )
-                            );
+                            $methodTemplate = $this->getMethodTemplate($method, $template);
 
                             $origMethodName = $method->getName();
-                            $methodName     = ucfirst($origMethodName);
-
-                            if (isset($this->methodNameCounter[$methodName])) {
-                                $this->methodNameCounter[$methodName]++;
-                            } else {
-                                $this->methodNameCounter[$methodName] = 1;
-                            }
-
-                            if ($this->methodNameCounter[$methodName] > 1) {
-                                $methodName .= $this->methodNameCounter[$methodName];
-                            }
+                            $methodName     = $this->getMethodName($origMethodName);
 
                             $methodTemplate->setVar(
                                 array(
@@ -277,6 +255,53 @@ class TestGenerator extends AbstractGenerator
                         }
                     }
                 }
+
+                if (!$assertAnnotationFound) {
+                    for ($i = 0; $i < 3; $i++) {
+                        $args = array();
+                        // hungarian notation
+                        // $sxxx ... string
+                        // $nxxx ... integer
+                        // $dxxx ... double
+                        // $bxxx ... boolean
+                        // $axxx ... array
+                        // $oxxx ... object
+                        foreach ($method->getParameters() as $param) {
+                            if (substr($param->name, 0, 1) === 'n') {
+                                $args[] = $this->getIntegerArg();
+                            } else {
+                                break;
+                            }
+                        }
+                        if (count($method->getParameters()) === count($args)) {
+                            $template = 'TestMethod';
+                            $assertion = 'Equals';
+                            $methodTemplate = $this->getMethodTemplate($method, $template);
+
+                            $origMethodName = $method->getName();
+                            $methodName     = $this->getMethodName($origMethodName);
+                            array_unshift($args, new $this->inClassName['fullyQualifiedClassName']);
+                            $expected = call_user_func_array(array($method, 'invoke'), $args);
+                            array_shift($args);
+
+                            $methodTemplate->setVar(
+                                array(
+                                    'annotation'     => implode(',', $args). ' == '. $expected,
+                                    'arguments'      => implode(',', $args),
+                                    'assertion'      => isset($assertion) ? $assertion : '',
+                                    'expected'       => $expected,
+                                    'origMethodName' => $origMethodName,
+                                    'className'      => $this->inClassName['fullyQualifiedClassName'],
+                                    'methodName'     => $methodName
+                                )
+                            );
+                            $methods .= $methodTemplate->render();
+
+                            $assertAnnotationFound = true;
+                        }
+                    }
+                }
+
 
                 if (!$assertAnnotationFound) {
                     $methodTemplate = new \Text_Template(
@@ -330,5 +355,43 @@ class TestGenerator extends AbstractGenerator
         );
 
         return $classTemplate->render();
+    }
+
+    private function getMethodTemplate($method, $template) {
+        if ($method->isStatic()) {
+            $template .= 'Static';
+        }
+        $methodTemplate = new \Text_Template(
+            sprintf(
+                '%s%stemplate%s%s.tpl',
+                __DIR__,
+                DIRECTORY_SEPARATOR,
+                DIRECTORY_SEPARATOR,
+                $template
+            )
+        );
+        return $methodTemplate;
+    }
+
+    private function getMethodName($origMethodName) {
+        $methodName     = ucfirst($origMethodName);
+
+        if (isset($this->methodNameCounter[$methodName])) {
+            $this->methodNameCounter[$methodName]++;
+        } else {
+            $this->methodNameCounter[$methodName] = 1;
+        }
+
+        if ($this->methodNameCounter[$methodName] > 1) {
+            $methodName .= $this->methodNameCounter[$methodName];
+        }
+        return $methodName;
+    }
+    
+    private function getIntegerArg() {
+        $choises = array(
+            PHP_INT_MAX, PHP_INT_MIN, -1, 0, 1,
+        );
+        return $choises[array_rand($choises)];
     }
 }
